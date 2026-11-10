@@ -1,0 +1,5 @@
+<library path="telemetry_panel">
+  <class name="a2r_rviz_panels/Telemetry" type="a2r_rviz_panels::TelemetryPanel" base_class_type="rviz_common::Panel">
+    <description>Live encoder, IMU and control status in a dockable read-only panel.</description>
+  </class>
+</library>

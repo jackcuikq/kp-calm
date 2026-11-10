@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>a2r_rviz_panels</name><version>0.1.0</version>
+  <description>Docked, read-only robot telemetry for RViz.</description>
+  <maintainer email="lab@example.invalid">A2R Lab</maintainer><license>MIT</license>
+  <url type="website">https://a2r-lab.org</url>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rviz_common</depend><depend>pluginlib</depend><depend>rclcpp</depend>
+  <depend>a2r_robot_interfaces</depend><depend>sensor_msgs</depend><depend>std_msgs</depend><depend>geometry_msgs</depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

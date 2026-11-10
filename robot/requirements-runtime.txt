@@ -1,0 +1,6 @@
+# Validated API versions from the working robot; system packages supply ROS/OpenCV/NumPy/Pillow.
+aiohttp==3.14.5
+evdev==2.0.0
+pyserial==3.5
+pyserial-asyncio==0.6
+smbus2==0.6.1

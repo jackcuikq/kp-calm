@@ -1,0 +1,17 @@
+std_msgs/Header header
+string hardware_session
+uint32 left_ticks
+uint32 right_ticks
+int64 left_relative_ticks
+int64 right_relative_ticks
+bool calibrated
+float64 left_distance_m
+float64 right_distance_m
+float64 left_delta_m
+float64 right_delta_m
+float64 left_speed_m_s
+float64 right_speed_m_s
+float64 sample_dt_s
+float64 left_metres_per_tick
+float64 right_metres_per_tick
+string calibration_method

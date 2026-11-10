@@ -1,0 +1,4 @@
+/**:
+  ros__parameters:
+    # A suggested development setting, not permission to move the car.
+    requested_forward_speed_m_s: 0.05

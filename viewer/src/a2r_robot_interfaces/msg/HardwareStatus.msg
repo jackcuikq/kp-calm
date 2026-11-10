@@ -1,0 +1,12 @@
+std_msgs/Header header
+string hardware_session
+bool uart_ok
+bool imu_fresh
+bool encoders_fresh
+bool joystick_connected
+bool camera_fresh
+bool demo_locked
+bool drive_enabled
+float64 applied_left_m_s
+float64 applied_right_m_s
+string reason

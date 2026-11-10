@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>team_navigation</name><version>0.2.0</version>
+  <description>Camera-guided navigation starter for the course project.</description>
+  <maintainer email="lab@example.invalid">A2R Lab</maintainer>
+  <license>MIT</license>
+  <url type="website">https://a2r-lab.org</url>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>rclpy</depend><depend>sensor_msgs</depend>
+  <depend>course_robot_interfaces</depend><depend>cv_bridge</depend>
+  <exec_depend>launch_ros</exec_depend><exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

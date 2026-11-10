@@ -1,0 +1,80 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+  - Class: a2r_rviz_panels/Telemetry
+    Name: Robot telemetry
+    Robot Namespace: jetson1
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 24; 29; 38
+    Fixed Frame: jetson1/visualization_world
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Ground grid (metres)
+      Enabled: true
+      Cell Size: 0.5
+      Plane: XY
+      Plane Cell Count: 40
+      Color: 85; 95; 110
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Robot model
+      Enabled: true
+      Topic:
+        Value: /jetson1/visualization/markers
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+    - Class: rviz_default_plugins/TF
+      Name: Robot axes
+      Enabled: true
+      Show Axes: true
+      Show Arrows: false
+      Show Names: false
+      Marker Scale: 2.5
+      Frame Timeout: 2
+    - Class: rviz_default_plugins/Image
+      Name: Camera (JPEG over network)
+      Enabled: true
+      Topic:
+        Value: /jetson1/camera/image_raw/compressed
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+      Queue Size: 2
+      Normalize Range: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Robot view
+      Target Frame: jetson1/visualization_world
+      Distance: 1.4
+      Pitch: 0.5
+      Yaw: 0.8
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+Window Geometry:
+  Camera (JPEG over network):
+    collapsed: false
+  Displays:
+    collapsed: false
+  Height: 900
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd00000001000000000000015a000002cafc0200000004fb0000003400430061006d00650072006100200028004a0050004500470020006f0076006500720020006e006500740077006f0072006b002900000000440000001b0000001600fffffffb000000100044006900730070006c0061007900730100000044000000eb000000eb00fffffffb0000000a005600690065007700730000000153000000b9000000b900fffffffb0000001e0052006f0062006f0074002000740065006c0065006d00650074007200790100000136000001d8000001d800ffffff00000259000002ca00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Robot telemetry:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1400
