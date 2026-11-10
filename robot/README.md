@@ -9,7 +9,7 @@ This is the ROS 2 workspace you build and run **on the Jetson**. The baseline is
 | `a2r_robot` | Hardware access, controller input, motor control, stopping rules and visualization data |
 | `a2r_robot_interfaces` | Robot telemetry/control message definitions |
 | `course_robot_interfaces` | Movement requests shared with the student program |
-| `team_navigation` | Editable student program; initially publishes zero movement |
+| `team_navigation` | Yellow-road camera follower; tune and validate before supervised use |
 
 ## Build
 
@@ -67,11 +67,15 @@ LB enables manual tank driving; RB permits the navigation requests. A or both bu
 
 Students determine and validate the effective tread spacing, then supply `track_width_m` to the base launch. It defaults to zero; no robot 1 geometry or encoder calibration is copied to other robots. Manual driving does not require the body-to-tread conversion.
 
-## Investigation and implementation
+## Navigation behavior and tuning
 
-Find and use ROS commands to discover nodes, sensor topics, message types, publication rates and delivery settings. The starter subscribes to camera images and IMU only. Encoder counts, calibrated tread distances and speeds are available; students decide how to subscribe and use them. No onboard odometry or supplied sensor-fusion solution is exposed.
+`team_navigation/team_navigation/navigation.py` provides a basic HSV yellow-road follower. It thresholds blue in the lower forward image and requests a stop when blue occupies enough of that region. A bottom-image yellow centroid gives the road offset; each fresh detection is smoothed, larger offsets reduce speed, and the PD controller steers toward the road. When both sides of the lookahead image contain separated yellow regions, it selects the side with more yellow pixels as the fork branch. These color thresholds and fork heuristics depend on your camera, lighting and course; inspect and tune them on recorded or stationary images before driving. A camera color threshold is not a safety-rated obstacle detector.
 
-The suggested `process_image`, `update_estimate`, `choose_action` and `compute_motion` hooks are optional structure. They do not impose four algorithms. Exceptions and non-finite controller results produce a fresh zero request rather than repeating a previous motion command. OpenCV images are BGR.
+The parameters and initial conservative speeds are in `team_navigation/config/navigation.yaml`. Tune steering first in the Low profile, on a clear course, with a spotter and an accessible power switch. The positive road offset means the road is right of image center; the controller requests negative yaw to steer right. Verify that sign with the robot lifted or under another staff-approved safe check before any floor test.
+
+**RB is the autonomous enable button.** The navigation node publishes requests continuously, but the base safety node only applies them in its armed autonomous mode after bumpers are released and sticks centered. Release and re-center before selecting the mode. **LB is manual drive; A or both bumpers stop/disarm.** Do not use RB for motion until `motion_enabled:=true` has been deliberately selected after acceptance checks and this robot has a measured positive `track_width_m`; the default width of zero rejects nonzero autonomous commands. Start in Low, and have a person ready to cut robot power. The button and software stops are not safety-rated.
+
+The node subscribes to camera images and IMU only; the IMU is not currently used for steering. Encoder counts, calibrated tread distances and speeds are available if you decide to extend estimation. No onboard odometry or supplied sensor-fusion solution is exposed. Exceptions, invalid images, stale frames, no yellow detection and blue detections produce fresh zero requests rather than reusing a prior motion command. OpenCV images are BGR.
 
 ## Run the software tests
 
@@ -85,7 +89,7 @@ python -m pip install -r requirements-test.txt
 python -m pytest tests -q
 ```
 
-They check the stopping rules, speed limits, message layout and the starter. They are most useful if you modify the baseline: a failure in the guard or speed-profile tests means you have changed how the robot stops. The tests of the starter expect the unmodified zero-motion program, so they fail once you implement navigation; that is expected.
+They check the stopping rules, speed limits, message layout and the navigation adapter's fail-closed behavior. They are most useful if you modify the baseline: a failure in the guard or speed-profile tests means you have changed how the robot stops.
 
 Two further checks in `tests/ros/` exercise real ROS messages with synthetic sensors and no motors. Run them on the Jetson after building, with no launch running, in a terminal you close afterwards:
 
@@ -100,7 +104,7 @@ python3 ~/a2r-student/tests/ros/ros_smoke.py
 python3 ~/a2r-student/tests/ros/starter_smoke.py
 ```
 
-Domain 92 keeps the synthetic inputs away from the live robot. `starter_smoke.py` also expects the unmodified starter.
+Domain 92 keeps the synthetic inputs away from the live robot. `starter_smoke.py` verifies that the node publishes fresh requests and stops on invalid synthetic image data.
 
 ## Your changes
 

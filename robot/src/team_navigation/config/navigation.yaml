@@ -1,4 +1,18 @@
 /**:
   ros__parameters:
-    # A suggested development setting, not permission to move the car.
     requested_forward_speed_m_s: 0.05
+    minimum_forward_speed_m_s: 0.02
+    fork_forward_speed_m_s: 0.035
+    slow_offset_fraction: 0.35
+    smoothing_alpha: 0.35
+    max_image_age_s: 0.20
+    steering_kp: 0.8
+    steering_kd: 0.05
+    max_yaw_rate_rad_s: 0.8
+    yellow_hsv_lower: [18, 80, 80]
+    yellow_hsv_upper: [38, 255, 255]
+    blue_hsv_lower: [90, 80, 50]
+    blue_hsv_upper: [135, 255, 255]
+    blue_stop_fraction: 0.02
+    fork_min_fraction: 0.015
+    fork_min_separation_fraction: 0.20

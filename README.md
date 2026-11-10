@@ -85,7 +85,7 @@ The passwords are posted on Canvas, not in this public repository. Keep them, an
 - [Quick reference](docs/QUICK_REFERENCE.md): the everyday commands on one page, for after you have completed setup once.
 - [Software tests](robot/README.md#run-the-software-tests)
 
-This repository is maintained by the [A2R Lab](https://a2r-lab.org) and released under the [MIT license](LICENSE). Retain the [course attribution](robot/NOTICE.md) when you copy or modify the starter. Automatic navigation remains student work; the supplied starter requests zero movement.
+This repository is maintained by the [A2R Lab](https://a2r-lab.org) and released under the [MIT license](LICENSE). Retain the [course attribution](robot/NOTICE.md) when you copy or modify the starter. The student navigation package contains a basic yellow-road follower; calibrate and validate it on your robot before use.
 
 ## AI Disclosure
 We used LLM tools, including Codex and Claude Code, to assist with software implementation, drafting, proofreading, and review. All final text, figures, code, and references were edited, revised, and reviewed by humans.

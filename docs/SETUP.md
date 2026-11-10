@@ -206,7 +206,7 @@ The previous build already included `team_navigation`. Keep the disabled robot l
 ros2 launch team_navigation team.launch.py namespace:="$ROBOT_NAMESPACE"
 ```
 
-The supplied program continuously requests zero motion; it is not a navigation solution.
+The supplied navigation node now detects yellow road pixels and publishes a low-speed follow request when the current camera image contains a valid yellow path. It requests zero when the image is missing or stale, yellow is not found, or enough blue pixels appear in the forward region. This is a starter vision heuristic, not a safety-rated water detector or a validated navigation solution.
 
 **In another prepared Jetson terminal C**, run each check separately (Ctrl+C ends continuous commands) and make sure you see reasonable outputs. **Talk to your team about what "reasonable outputs" would mean for each.**
 
@@ -231,14 +231,14 @@ ros2 topic echo "/$ROBOT_NAMESPACE/safety/status" --once
 | IMU | Repeated messages with advancing stamps and plausible values; gently changing the stationary robot's orientation changes orientation readings. A topic name alone is insufficient. |
 | Camera | Repeated frames; PC RViz image changes when you move an object in view. |
 | Encoders | Fresh stamped messages. Counts may remain constant at rest; verify changes during the later controlled drive. `calibrated: false` and NaN distances/speeds are expected before calibration. |
-| Starter | `navigation/request` has advancing timestamps and both requested velocities zero. |
+| Navigation | `navigation/request` has advancing timestamps. On this 2x2 synthetic/invalid view or when no yellow road is detected, both requested velocities are zero. |
 | PC communication | With matching domain on the same router, the PC sees the robot's live topics and RViz telemetry/image. |
 
 Startup gaps can briefly disarm the controller. Persistent stale data or faults must be resolved before enabling motors. `ros2 topic hz` reports the subscriber's observed rate; require continuing data, not an assumed exact frequency.
 
 ## Controlled movement and stopping check
 
-Use a clear floor area with someone able to reach RVR power. Stop the disabled base with Ctrl+C; keep the team starter unchanged (zero requests). In prepared terminal A:
+Use a clear floor area with someone able to reach RVR power. Stop the disabled base with Ctrl+C. Keep the team launch stopped during this manual-only acceptance check. In prepared terminal A:
 
 ```bash
 ros2 launch a2r_robot robot.launch.py namespace:="$ROBOT_NAMESPACE" motion_enabled:=true
@@ -441,7 +441,7 @@ Read the first words of `safety/status`:
 | `no navigation request after selection` or `navigation request expired` | The team launch is not running, crashed, or stopped publishing. Check terminal B. |
 | `hardware or joystick stale` | The base is not healthy. Check terminal A and `hardware/status`. |
 
-If the robot holds still with status `autonomous`, your code is requesting zero: check `navigation/request` and the terminal B log for a `Navigation failed; requesting zero motion` error.
+If the robot holds still with status `autonomous`, first check whether the camera image passes the configured yellow/blue thresholds and whether `navigation/request` is nonzero. Missing/stale images, no yellow detection and detected blue regions deliberately request zero. Check the terminal B log for a `Navigation failed; requesting zero motion` error as well.
 
 ### The edit-test loop
 

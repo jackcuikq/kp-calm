@@ -371,6 +371,50 @@ def test_starter_exception_and_nonfinite_do_not_reuse_motion(navigation):
     assert navigation.messages[-1].yaw_rate_rad_s == 0
 
 
+def test_navigation_smooths_new_offsets_and_rejects_stale_or_blue(navigation):
+    navigation._now_seconds = lambda: 10.05
+    navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=0)
+    estimate = navigation.update_estimate(
+        {'offset': .4, 'blue_fraction': 0., 'fork': False}, None)
+    assert estimate['valid'] and estimate['offset'] == .4
+
+    navigation._now_seconds = lambda: 10.15
+    navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=100_000_000)
+    estimate = navigation.update_estimate(
+        {'offset': -.2, 'blue_fraction': 0., 'fork': False}, None)
+    assert estimate['valid']
+    assert estimate['offset'] == pytest.approx(.19)
+    assert estimate['offset_rate'] == pytest.approx(-2.1)
+
+    navigation._now_seconds = lambda: 10.31
+    estimate = navigation.update_estimate(
+        {'offset': -.2, 'blue_fraction': 0., 'fork': False}, None)
+    assert not estimate['valid']
+
+    navigation._now_seconds = lambda: 10.32
+    navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=320_000_000)
+    estimate = navigation.update_estimate(
+        {'offset': .1, 'blue_fraction': navigation.blue_stop_fraction, 'fork': False}, None)
+    assert not estimate['valid']
+
+
+def test_navigation_slows_for_offset_and_pd_turns_toward_road(navigation):
+    action = navigation.choose_action(
+        {'valid': True, 'offset': .1, 'offset_rate': 0., 'fork': False})
+    speed, yaw = navigation.compute_motion(action)
+    assert navigation.min_speed < speed < navigation.max_speed
+    assert yaw < 0
+
+    sharp = navigation.choose_action(
+        {'valid': True, 'offset': .8, 'offset_rate': 0., 'fork': False})
+    assert navigation.compute_motion(sharp)[0] == navigation.min_speed
+
+    fork = navigation.choose_action(
+        {'valid': True, 'offset': 0., 'offset_rate': 0., 'fork': True})
+    assert navigation.compute_motion(fork)[0] == navigation.fork_speed
+    assert navigation.compute_motion(None) == (0., 0.)
+
+
 def test_hardware_checks_mode_and_post_selection_stamp():
     text = (ROOT/'robot/src/a2r_robot/a2r_robot/hardware.py').read_text()
     assert 'selected_mode=self.local_deadman.mode' in text
