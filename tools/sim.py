@@ -168,7 +168,10 @@ class Camera:
 def ref_process_image(image, stamp):
     small = cv2.resize(image, (160, 120), interpolation=cv2.INTER_AREA)
     hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, (15, 80, 80), (40, 255, 255))      # yellow road
+    # Yellow paper road measured on the real camera: H~26, S~170, V~228.
+    # S/V floors keep the beige wall (low S) out; rows above the table are ignored.
+    mask = cv2.inRange(hsv, (18, 120, 120), (35, 255, 255))
+    mask[:50] = 0
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     band = mask[80:100]
     cols = np.where(band.any(axis=0))[0]
