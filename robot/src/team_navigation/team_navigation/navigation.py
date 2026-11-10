@@ -18,7 +18,9 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from rclpy.executors import ExternalShutdownException
 from rclpy.time import Time
-from sensor_msgs.msg import Image, Imu
+from sensor_msgs.msg import Image, Imu, CompressedImage
+import cv2
+import numpy as np
 from cv_bridge import CvBridge
 from course_robot_interfaces.msg import MotionRequest
 
@@ -55,6 +57,8 @@ class Navigation(Node):
         self.publisher = self.create_publisher(
             MotionRequest, 'navigation/request',
             QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+        # Perception overlay for tools/cam_web.py (http://ROBOT_IP:8081/). Cheap when nobody listens.
+        self.debug_pub = self.create_publisher(CompressedImage, 'navigation/debug/compressed', qos_profile_sensor_data)
         self.create_timer(.05, self.tick)
 
     def image_cb(self, msg):
@@ -68,6 +72,18 @@ class Navigation(Node):
 
     def imu_cb(self, msg):
         self.imu = msg
+
+    def publish_debug(self, bgr):
+        """Send a BGR image (any size) to the browser viewer; call from process_image."""
+        if self.debug_pub.get_subscription_count() == 0:
+            return
+        ok, jpg = cv2.imencode('.jpg', bgr, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            msg = CompressedImage()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.format = 'jpeg'
+            msg.data = jpg.tobytes()
+            self.debug_pub.publish(msg)
 
     # ------------------------------------------------------------------ perception
     def process_image(self, image):
