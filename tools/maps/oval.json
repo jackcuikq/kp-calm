@@ -1,0 +1,9 @@
+{
+ "ppm": 100,
+ "start": [
+  4.9,
+  2.1,
+  90.6
+ ],
+ "note": "start = x,y in metres from the bottom-left corner, heading in degrees CCW from +x"
+}
