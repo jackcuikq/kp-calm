@@ -2,3 +2,22 @@
   ros__parameters:
     # A suggested development setting, not permission to move the car.
     requested_forward_speed_m_s: 0.05
+
+    # ---- control (compute_motion) ----
+    # Pixel units refer to the resized image used by process_image (160 px wide).
+    kp_rad_s_per_px: 0.02       # yaw = -(kp*offset + kd*d_offset); 40 px off -> 0.8 rad/s
+    kd_rad_per_px: 0.002
+    yaw_max_rad_s: 1.5
+    image_half_width_px: 80.0
+    slow_gain: 1.0              # speed factor = 1 - slow_gain*|offset|/half_width
+    v_min_frac: 0.3             # never slower than this fraction of target speed while following
+
+    # ---- estimation (update_estimate) ----
+    max_observation_age_s: 0.2  # older images do not steer the car
+    max_missing_ticks: 3        # after this many ticks without road -> stop
+    ema_alpha: 0.5
+
+    # ---- debugging ----
+    # Set to a number (e.g. 30.0) for a dry run with motors disabled:
+    # perception is bypassed and control sees a constant offset. .nan = off.
+    debug_fixed_offset_px: .nan
