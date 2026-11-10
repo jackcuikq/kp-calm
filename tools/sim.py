@@ -40,6 +40,10 @@ YAML = ROOT / 'robot' / 'src' / 'team_navigation' / 'config' / 'navigation.yaml'
 # ----------------------------------------------------------------------------- fake ROS
 class SimTime:
     def __init__(self, ns): self.nanoseconds = int(ns)
+    @property
+    def sec(self): return self.nanoseconds // 1_000_000_000
+    @property
+    def nanosec(self): return self.nanoseconds % 1_000_000_000
     def __sub__(self, o): return SimTime(self.nanoseconds - o.nanoseconds)
     def to_msg(self): return self
     @staticmethod
@@ -233,6 +237,7 @@ def main():
     frames = deque()
     log, trail = [], []
     used_ref = False
+    used_node_once = False
     writer = None
     if a.video:
         writer = cv2.VideoWriter(str(a.video), cv2.VideoWriter_fourcc(*'mp4v'), 20, (cw + 320, max(ch, 320)))
@@ -252,7 +257,9 @@ def main():
 
         # ---- the real pipeline ----
         obs = nav.process_image(image) if a.perception != 'ref' else None
-        if obs is None and a.perception != 'node':
+        if obs is not None and (obs.get('valid') or obs.get('offset') is not None):
+            used_node_once = True   # the node's own detector works; never fall back after this
+        if (obs is None or obs.get('offset_px') is None and obs.get('offset') is None and not obs.get('valid')) and a.perception != 'node' and not used_node_once:
             obs = ref_process_image(image, stamp)
             if not used_ref:
                 used_ref = True
@@ -260,6 +267,7 @@ def main():
         est = nav.update_estimate(obs, None)
         act = nav.choose_action(est)
         v_req, w_req = nav.compute_motion(act)
+        obs_px, est_px, kind = to_px(obs, 'offset_px', 'offset'), to_px(est, 'offset_px', 'offset'), action_kind(act, est)
         if not all(math.isfinite(q) for q in (v_req, w_req)):
             v_req = w_req = 0.0
 
@@ -279,13 +287,12 @@ def main():
         if cte > a.road_width / 2 + 0.05:
             off_track_steps += 1
         trail.append((x, y))
-        log.append(dict(t=CLOCK.t, offset_px=(obs or {}).get('offset_px', float('nan')),
-                        valid=int(bool((obs or {}).get('valid'))), est_px=est['offset_px'] if est else float('nan'),
-                        action=(act or {}).get('kind', 'none'), v_req=v_req, yaw_req=w_req,
+        log.append(dict(t=CLOCK.t, offset_px=obs_px, valid=int(not math.isnan(obs_px)), est_px=est_px,
+                        action=kind, v_req=v_req, yaw_req=w_req,
                         v_cmd=v_cmd, yaw_cmd=w_cmd, cte_m=cte, x=x, y=y, psi=psi))
 
         if window or writer:
-            canvas = draw(image, obs, est, act, v_req, w_req, v_cmd, w_cmd, cte, world, size_m, trail, centre, ci, cw, ch)
+            canvas = draw(image, obs_px, est_px, kind, v_req, w_req, v_cmd, w_cmd, cte, world, size_m, trail, cw, ch)
             if writer: writer.write(canvas)
             if window:
                 cv2.imshow('sim', canvas)
@@ -302,7 +309,7 @@ def main():
     print(f'{len(log)} ticks, {CLOCK.t:.1f} s simulated; track={a.track} speed={params["requested_forward_speed_m_s"]} '
           f'latency={a.latency*50} ms')
     print(f'cross-track error: mean {cte.mean()*100:.1f} cm, max {cte.max()*100:.1f} cm, '
-          f'off-road {off_track_steps*dt:.1f} s, stops {sum(r["action"]!="follow" for r in log)*dt:.1f} s')
+          f'off-road {off_track_steps*dt:.1f} s, stops {sum(not r["action"].startswith("follow") for r in log)*dt:.1f} s, fork-flagged {sum("fork" in r["action"] for r in log)*dt:.1f} s')
     if a.csv:
         with a.csv.open('w', newline='') as f:
             wr = csv.DictWriter(f, fieldnames=list(log[0])); wr.writeheader(); wr.writerows(log)
@@ -325,19 +332,35 @@ def main():
                      f'kp={params.get("kp_rad_s_per_px")} kd={params.get("kd_rad_per_px")}')
         fig.tight_layout(); fig.savefig(a.plot, dpi=120); print('plot ->', a.plot)
 
-def draw(image, obs, est, act, v_req, w_req, v_cmd, w_cmd, cte, world, size_m, trail, centre, ci, cw, ch):
+def to_px(d, px_key, frac_key):
+    """Offset in 160-px-image pixels from either contract (px, or fraction of half width); nan if invalid."""
+    if not d or d.get('valid') is False:
+        return float('nan')
+    if d.get(px_key) is not None:
+        return float(d[px_key])
+    if d.get(frac_key) is not None:
+        return float(d[frac_key]) * 80.0
+    return float('nan')
+
+def action_kind(act, est):
+    if act is None:
+        return 'stop'
+    if 'kind' in act:
+        return act['kind']
+    return 'follow' + (' (fork)' if (est or {}).get('fork') else '')
+
+def draw(image, obs_px, est_px, kind, v_req, w_req, v_cmd, w_cmd, cte, world, size_m, trail, cw, ch):
     img = image.copy()
     sx, sy = cw / 160, ch / 120
     cv2.rectangle(img, (0, int(80 * sy)), (cw - 1, int(100 * sy)), (255, 255, 255), 1)
     cv2.line(img, (cw // 2, int(80 * sy)), (cw // 2, int(100 * sy)), (255, 255, 255), 1)
-    if obs and obs.get('valid'):
-        u = int((80 + obs['offset_px']) * sx)
+    if not math.isnan(obs_px):
+        u = int((80 + obs_px) * sx)
         cv2.line(img, (u, int(78 * sy)), (u, int(102 * sy)), (0, 0, 255), 2)
-    if est:
-        u = int((80 + est['offset_px']) * sx)
+    if not math.isnan(est_px):
+        u = int((80 + est_px) * sx)
         cv2.circle(img, (u, int(90 * sy)), 5, (255, 0, 0), -1)
-    kind = (act or {}).get('kind', 'none')
-    txt = [f'{kind}  obs={obs["offset_px"]:+.0f}px' if obs and obs.get('valid') else f'{kind}  obs=none',
+    txt = [f'{kind}  obs={obs_px:+.0f}px' if not math.isnan(obs_px) else f'{kind}  obs=none',
            f'req v={v_req:.3f} yaw={w_req:+.2f}', f'cmd v={v_cmd:.3f} yaw={w_cmd:+.2f}', f'cte={cte*100:.1f}cm']
     for i, s in enumerate(txt):
         cv2.putText(img, s, (8, 20 + 18 * i), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 0, 0), 3)
