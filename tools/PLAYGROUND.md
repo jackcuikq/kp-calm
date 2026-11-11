@@ -71,8 +71,25 @@ One headless run per value, one table row each.
 
 ## 4. Replay real camera frames (open loop)
 
-Record on the car first (`tools/cam_web.py --save ~/frames`, drive a lap with
-the controller), copy the folder to the laptop, then:
+Record a run on the car (base + team launch running, prepared terminal):
+
+```bash
+bash ~/Projects/kp-calm/tools/record.sh lap1        # Ctrl+C to stop -> ~/bags/<timestamp>_lap1
+```
+
+On the laptop:
+
+```bash
+scp -r a2r-lab-jetson@ROBOT_IP:bags/<timestamp>_lap1 .
+pip install rosbags
+python tools/bag2video.py <timestamp>_lap1 --frames lap1_frames
+```
+
+That writes `<name>.mp4` (camera with offset / request / tread / delay
+overlaid, debug image beside it), `_telemetry.csv`, `_request.csv`,
+`_motors.csv`, `_imu.csv`, a `.png` with offset-over-time, request vs tread
+command, image age + pipeline time, gyro yaw rate (the handout's plots, from
+real data), and `lap1_frames/` for replay:
 
 ```bash
 python tools/playground.py --replay ~/frames                 # window, 20 fps

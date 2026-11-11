@@ -12,6 +12,7 @@ Data contract between hooks (all plain dicts, pixel units unless noted):
     estimate    = {'offset_px': float, 'd_offset_px_s': float, 'valid': bool}
     action      = {'kind': 'follow' | 'stop', 'offset_px': float, 'd_offset_px_s': float}
 """
+import json
 import math
 import rclpy
 from rclpy.node import Node
@@ -19,6 +20,7 @@ from rclpy.qos import qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from rclpy.executors import ExternalShutdownException
 from rclpy.time import Time
 from sensor_msgs.msg import Image, Imu, CompressedImage
+from std_msgs.msg import String
 import cv2
 import numpy as np
 from cv_bridge import CvBridge
@@ -59,6 +61,9 @@ class Navigation(Node):
             QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
         # Perception overlay for tools/cam_web.py (http://ROBOT_IP:8081/). Cheap when nobody listens.
         self.debug_pub = self.create_publisher(CompressedImage, 'navigation/debug/compressed', qos_profile_sensor_data)
+        # One JSON line per tick (observation, estimate, action, timings). Recorded by tools/record.sh,
+        # turned into the offset-over-time / delay plots by tools/bag2video.py.
+        self.telemetry_pub = self.create_publisher(String, 'navigation/telemetry', 10)
         self.create_timer(.05, self.tick)
 
     def image_cb(self, msg):
@@ -164,6 +169,8 @@ class Navigation(Node):
 
     def tick(self):
         forward, yaw = 0., 0.
+        observation = estimate = action = None
+        t0 = self.get_clock().now()
         try:
             observation = self.process_image(self.image)
             estimate = self.update_estimate(observation, self.imu)
@@ -178,10 +185,25 @@ class Navigation(Node):
             if error != self.previous_error:
                 self.get_logger().error(f'Navigation failed; requesting zero motion: {error}')
                 self.previous_error = error
+        now = self.get_clock().now()
         msg = MotionRequest()
-        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.stamp = now.to_msg()
         msg.forward_speed_m_s, msg.yaw_rate_rad_s = float(forward), float(yaw)
         self.publisher.publish(msg)
+        if self.telemetry_pub.get_subscription_count():
+            age_ms = ((now - Time.from_msg(self.image_stamp)).nanoseconds / 1e6) if self.image_stamp is not None else None
+            self.telemetry_pub.publish(String(data=json.dumps({
+                't': now.nanoseconds / 1e9, 'image_age_ms': age_ms,
+                'pipeline_ms': (now - t0).nanoseconds / 1e6,
+                'obs': _plain(observation), 'est': _plain(estimate), 'action': _plain(action),
+                'v': float(forward), 'yaw': float(yaw)})))
+
+
+def _plain(d):
+    """JSON-safe copy of a hook result (drops stamps and other non-scalars)."""
+    if not isinstance(d, dict):
+        return d
+    return {k: (v if isinstance(v, (int, float, str, bool)) or v is None else None) for k, v in d.items()}
 
 
 def main():

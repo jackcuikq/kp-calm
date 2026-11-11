@@ -125,6 +125,7 @@ def install_fake_ros():
     mod('rclpy.executors', ExternalShutdownException=Exception)
     mod('rclpy.time', Time=SimTime)
     mod('sensor_msgs'); mod('sensor_msgs.msg', Image=object, Imu=object, CompressedImage=_Msg)
+    mod('std_msgs'); mod('std_msgs.msg', String=_Msg, Header=_Msg)
     mod('cv_bridge', CvBridge=lambda: None)
     mod('course_robot_interfaces'); mod('course_robot_interfaces.msg', MotionRequest=_Msg)
 
