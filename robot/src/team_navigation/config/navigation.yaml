@@ -1,8 +1,8 @@
 /**:
   ros__parameters:
-    requested_forward_speed_m_s: 0.05
-    minimum_forward_speed_m_s: 0.02
-    fork_forward_speed_m_s: 0.035
+    requested_forward_speed_m_s: 0.5
+    minimum_forward_speed_m_s: 0.15
+    fork_forward_speed_m_s: 0.20
     slow_offset_fraction: 0.35
     smoothing_alpha: 0.35
     max_image_age_s: 0.20
