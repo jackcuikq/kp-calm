@@ -23,18 +23,30 @@ class Navigation(Node):
         self.kp = float(self.declare_parameter('steering_kp', 0.8).value)
         self.kd = float(self.declare_parameter('steering_kd', 0.05).value)
         self.max_yaw_rate = float(self.declare_parameter('max_yaw_rate_rad_s', 0.8).value)
-        self.blue_stop_fraction = float(self.declare_parameter('blue_stop_fraction', 0.02).value)
+        self.blue_stop_fraction = float(self.declare_parameter('blue_stop_fraction', 0.08).value)
+        self.blue_corridor_half_width = float(self.declare_parameter(
+            'blue_corridor_half_width_fraction', 0.15).value)
+        self.blue_roi_top = float(self.declare_parameter(
+            'blue_roi_top_fraction', 0.60).value)
+        self.blue_roi_bottom = float(self.declare_parameter(
+            'blue_roi_bottom_fraction', 0.90).value)
         self.fork_min_fraction = float(self.declare_parameter('fork_min_fraction', 0.015).value)
         self.fork_min_separation = float(self.declare_parameter(
             'fork_min_separation_fraction', 0.20).value)
         self.yellow_lower = self._hsv_triplet(
-            self.declare_parameter('yellow_hsv_lower', [18, 80, 80]).value)
+            self.declare_parameter('yellow_hsv_lower', [20, 100, 100]).value)
         self.yellow_upper = self._hsv_triplet(
-            self.declare_parameter('yellow_hsv_upper', [38, 255, 255]).value)
+            self.declare_parameter('yellow_hsv_upper', [34, 255, 255]).value)
+        self.orange_lower = self._hsv_triplet(
+            self.declare_parameter('orange_hsv_lower', [4, 150, 80]).value)
+        self.orange_upper = self._hsv_triplet(
+            self.declare_parameter('orange_hsv_upper', [19, 255, 255]).value)
+        self.orange_guard_kernel = int(self.declare_parameter(
+            'orange_guard_kernel_px', 15).value)
         self.blue_lower = self._hsv_triplet(
-            self.declare_parameter('blue_hsv_lower', [90, 80, 50]).value)
+            self.declare_parameter('blue_hsv_lower', [98, 100, 60]).value)
         self.blue_upper = self._hsv_triplet(
-            self.declare_parameter('blue_hsv_upper', [135, 255, 255]).value)
+            self.declare_parameter('blue_hsv_upper', [122, 255, 255]).value)
         self._validate_parameters()
 
         self.bridge = CvBridge()
@@ -73,10 +85,18 @@ class Navigation(Node):
             raise ValueError('steering gains must be finite and nonnegative')
         if not 0 < self.blue_stop_fraction <= 1 or not 0 < self.fork_min_fraction <= 1:
             raise ValueError('pixel fractions must be in (0, 1]')
+        if not 0 < self.blue_corridor_half_width < 0.5:
+            raise ValueError('blue_corridor_half_width_fraction must be in (0, 0.5)')
+        if not 0 <= self.blue_roi_top < self.blue_roi_bottom <= 1:
+            raise ValueError('blue ROI fractions must satisfy 0 <= top < bottom <= 1')
         if not 0 < self.fork_min_separation < 1:
             raise ValueError('fork_min_separation_fraction must be in (0, 1)')
+        if not 1 <= self.orange_guard_kernel <= 101 or self.orange_guard_kernel % 2 == 0:
+            raise ValueError('orange_guard_kernel_px must be an odd value from 1 to 101')
         if any(low > high for low, high in zip(self.yellow_lower, self.yellow_upper)):
             raise ValueError('yellow HSV lower bound must not exceed upper bound')
+        if any(low > high for low, high in zip(self.orange_lower, self.orange_upper)):
+            raise ValueError('orange HSV lower bound must not exceed upper bound')
         if any(low > high for low, high in zip(self.blue_lower, self.blue_upper)):
             raise ValueError('blue HSV lower bound must not exceed upper bound')
 
@@ -119,9 +139,25 @@ class Navigation(Node):
             raise ValueError('camera frame is too small to process')
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         yellow = cv2.inRange(hsv, self.yellow_lower, self.yellow_upper)
+        orange = cv2.inRange(hsv, self.orange_lower, self.orange_upper)
         blue = cv2.inRange(hsv, self.blue_lower, self.blue_upper)
 
-        blue_roi = blue[height // 2:, width // 6:width - width // 6]
+        # Orange specular highlights sometimes drift into the measured yellow
+        # range. Remove yellow pixels close to a confidently orange region so a
+        # large tunnel wall cannot pull the road centroid toward itself.
+        guard_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (self.orange_guard_kernel, self.orange_guard_kernel))
+        orange_guard = cv2.dilate(orange, guard_kernel)
+        yellow = cv2.bitwise_and(yellow, cv2.bitwise_not(orange_guard))
+
+        # Blue paper alongside a valid road is expected. Stop only when enough
+        # blue occupies the near, central driving corridor.
+        center_x = width // 2
+        half_width = max(1, int(width * self.blue_corridor_half_width))
+        blue_top = int(height * self.blue_roi_top)
+        blue_bottom = max(blue_top + 1, int(height * self.blue_roi_bottom))
+        blue_roi = blue[blue_top:blue_bottom,
+                        max(0, center_x - half_width):min(width, center_x + half_width)]
         blue_fraction = cv2.countNonZero(blue_roi) / blue_roi.size
         if blue_fraction >= self.blue_stop_fraction:
             return {'blue_fraction': blue_fraction, 'offset': None, 'fork': False}

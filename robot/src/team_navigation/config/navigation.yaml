@@ -9,10 +9,17 @@
     steering_kp: 0.8
     steering_kd: 0.05
     max_yaw_rate_rad_s: 0.8
-    yellow_hsv_lower: [18, 80, 80]
-    yellow_hsv_upper: [38, 255, 255]
-    blue_hsv_lower: [90, 80, 50]
-    blue_hsv_upper: [135, 255, 255]
-    blue_stop_fraction: 0.02
+    # Calibrated from the team's UC684 clips under the lab lighting.
+    yellow_hsv_lower: [20, 100, 100]
+    yellow_hsv_upper: [34, 255, 255]
+    orange_hsv_lower: [4, 150, 80]
+    orange_hsv_upper: [19, 255, 255]
+    orange_guard_kernel_px: 15
+    blue_hsv_lower: [98, 100, 60]
+    blue_hsv_upper: [122, 255, 255]
+    blue_stop_fraction: 0.08
+    blue_corridor_half_width_fraction: 0.15
+    blue_roi_top_fraction: 0.60
+    blue_roi_bottom_fraction: 0.90
     fork_min_fraction: 0.015
     fork_min_separation_fraction: 0.20

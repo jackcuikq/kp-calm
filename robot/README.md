@@ -50,6 +50,19 @@ ros2 launch team_navigation team.launch.py namespace:="$ROBOT_NAMESPACE"
 
 Follow [sensor checks and physical acceptance](../docs/SETUP.md#run-the-student-program) before enabling movement. Keep namespace/domain consistent in all terminals.
 
+For this team's calibrated robot, `scripts/start_robot_motion.sh` prepares the
+runtime environment and launches the base with motion enabled and the initial
+robot-specific `0.22 m` track-width estimate. It does not launch navigation or
+bypass the controller/safety gates:
+
+```bash
+cd ~/a2r-student/robot
+./scripts/start_robot_motion.sh
+```
+
+After a refined physical calibration, either update the script or override it
+for one launch with `ROBOT_TRACK_WIDTH_M=VALUE ./scripts/start_robot_motion.sh`.
+
 ## Public request
 
 Topic: `navigation/request`, relative to the assigned robot namespace.
