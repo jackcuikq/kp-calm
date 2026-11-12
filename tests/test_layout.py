@@ -25,3 +25,11 @@ def test_geometry_has_no_assumed_numeric_value():
     launch=(REPO/'robot/src/a2r_robot/launch/robot.launch.py').read_text()
     assert "DeclareLaunchArgument('track_width_m',default_value='0.0')" in launch
     assert 'tread_separation_m' not in launch
+
+
+def test_camera_recorder_is_installed_and_uses_compressed_topic():
+    setup=(REPO/'robot/src/team_navigation/setup.py').read_text()
+    recorder=(REPO/'robot/src/team_navigation/team_navigation/record_camera.py').read_text()
+    assert 'record_camera = team_navigation.record_camera:main' in setup
+    assert 'camera/image_raw/compressed' in recorder
+    assert 'MotionRequest' not in recorder

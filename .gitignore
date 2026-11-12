@@ -6,6 +6,9 @@ __pycache__/
 build/
 install/
 log/
+camera_clips/
+*.avi
+*.mp4
 *.aux
 *.log
 *.out

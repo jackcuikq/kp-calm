@@ -77,6 +77,20 @@ The parameters and initial conservative speeds are in `team_navigation/config/na
 
 The node subscribes to camera images and IMU only; the IMU is not currently used for steering. Encoder counts, calibrated tread distances and speeds are available if you decide to extend estimation. No onboard odometry or supplied sensor-fusion solution is exposed. Exceptions, invalid images, stale frames, no yellow detection and blue detections produce fresh zero requests rather than reusing a prior motion command. OpenCV images are BGR.
 
+### Record a short camera clip
+
+With the base launch running, a second prepared Jetson terminal can record the
+compressed ROS camera stream without enabling or commanding motion:
+
+```bash
+ros2 run team_navigation record_camera --seconds 5 --namespace "$ROBOT_NAMESPACE"
+```
+
+The command waits up to ten seconds for the first frame and then writes an
+MJPEG AVI under `camera_clips/` in the current directory. Use `--output
+/path/to/name.avi` to choose a different location. Record clips with the camera
+mounted on the robot in the real course lighting; do not commit videos to Git.
+
 ## Run the software tests
 
 These tests need no robot and no ROS. Run them on your PC or the Jetson, from the repository root:

@@ -13,5 +13,8 @@ setup(
     maintainer='A2R Lab', maintainer_email='lab@example.invalid',
     url='https://a2r-lab.org',
     description='Course navigation starter', license='MIT',
-    entry_points={'console_scripts': ['navigation = team_navigation.navigation:main']},
+    entry_points={'console_scripts': [
+        'navigation = team_navigation.navigation:main',
+        'record_camera = team_navigation.record_camera:main',
+    ]},
 )
