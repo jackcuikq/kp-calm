@@ -234,10 +234,15 @@ class Navigation(Node):
             return {'valid': False, 'reason': 'missing or stale image'}
         blue_detected = observation['blue_fraction'] >= self.blue_stop_fraction
         scan_yellow = observation.get('scan_yellow_fraction', 0.0)
+        raw_offset = observation['offset']
+
+        if not self.scan_enabled:
+            self._scan_state = 'following'
+            self._scan_angle = 0.0
 
         if self._scan_state == 'scanning':
             if (self._scan_angle >= self.scan_min_angle and not blue_detected and
-                    scan_yellow >= self.scan_yellow_fraction):
+                    scan_yellow >= self.scan_yellow_fraction and raw_offset is not None):
                 self._scan_state = 'following'
             elif self._scan_angle >= 2 * math.pi:
                 self._scan_state = 'scan_failed'
@@ -249,7 +254,8 @@ class Navigation(Node):
                 return {'valid': False, 'reason': f'scanning {direction}', 'scan': True}
 
         if self._scan_state == 'scan_failed':
-            if not blue_detected and scan_yellow >= self.scan_yellow_fraction:
+            if (not blue_detected and scan_yellow >= self.scan_yellow_fraction and
+                    raw_offset is not None):
                 self._scan_state = 'following'
             else:
                 self._clear_road_estimate()
@@ -264,9 +270,13 @@ class Navigation(Node):
             self._scan_angle = 0.0
             self._clear_road_estimate()
             return {'valid': False, 'reason': 'blue region; starting scan', 'scan': True}
-        raw_offset = observation['offset']
         if raw_offset is None:
             self._clear_road_estimate()
+            if self.scan_enabled:
+                self._scan_state = 'scanning'
+                self._scan_angle = 0.0
+                return {'valid': False, 'reason': 'yellow road lost; starting scan',
+                        'scan': True}
             return {'valid': False, 'reason': 'yellow road not detected'}
 
         if stamp != self._last_frame_stamp:

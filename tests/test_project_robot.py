@@ -417,6 +417,20 @@ def test_navigation_scan_turns_left_then_accepts_first_clear_yellow(navigation):
     assert navigation._scan_state == 'following'
 
 
+def test_navigation_lost_yellow_starts_scan_but_stale_image_does_not(navigation):
+    navigation._now_seconds = lambda: 10.05
+    navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=0)
+    estimate = navigation.update_estimate(
+        {'offset': None, 'blue_fraction': 0., 'fork': False,
+         'scan_yellow_fraction': 0.0}, None)
+    assert estimate['scan']
+    assert navigation.compute_motion(navigation.choose_action(estimate))[1] > 0
+
+    estimate = navigation.update_estimate(None, None)
+    assert not estimate['valid'] and not estimate.get('scan', False)
+    assert navigation.compute_motion(navigation.choose_action(estimate)) == (0., 0.)
+
+
 def test_navigation_scan_direction_flag(navigation):
     action = {'scan': True}
     navigation.scan_anticlockwise = True
@@ -432,6 +446,11 @@ def test_navigation_scan_can_be_disabled(navigation):
     estimate = navigation.update_estimate(
         {'offset': None, 'blue_fraction': navigation.blue_stop_fraction,
          'fork': False, 'scan_yellow_fraction': 0.0}, None)
+    assert not estimate['valid'] and not estimate.get('scan', False)
+    assert navigation.compute_motion(navigation.choose_action(estimate)) == (0., 0.)
+    estimate = navigation.update_estimate(
+        {'offset': None, 'blue_fraction': 0., 'fork': False,
+         'scan_yellow_fraction': 0.0}, None)
     assert not estimate['valid'] and not estimate.get('scan', False)
     assert navigation.compute_motion(navigation.choose_action(estimate)) == (0., 0.)
 
