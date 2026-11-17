@@ -396,6 +396,37 @@ def test_navigation_smooths_new_offsets_and_rejects_stale_or_blue(navigation):
     estimate = navigation.update_estimate(
         {'offset': .1, 'blue_fraction': navigation.blue_stop_fraction, 'fork': False}, None)
     assert not estimate['valid']
+    assert navigation.compute_motion(navigation.choose_action(estimate)) == (
+        0., navigation.scan_yaw_rate)
+
+
+def test_navigation_scan_turns_left_then_accepts_first_clear_yellow(navigation):
+    navigation._now_seconds = lambda: 10.05
+    navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=0)
+    blue = {'offset': None, 'blue_fraction': navigation.blue_stop_fraction,
+            'fork': False, 'scan_yellow_fraction': 0.0}
+    estimate = navigation.update_estimate(blue, None)
+    assert estimate['scan']
+    assert navigation.compute_motion(navigation.choose_action(estimate))[1] > 0
+
+    navigation._scan_angle = navigation.scan_min_angle
+    clear_yellow = {'offset': .1, 'blue_fraction': 0., 'fork': False,
+                    'scan_yellow_fraction': navigation.scan_yellow_fraction}
+    estimate = navigation.update_estimate(clear_yellow, None)
+    assert estimate['valid']
+    assert navigation._scan_state == 'following'
+
+
+def test_navigation_scan_stops_after_one_revolution(navigation):
+    navigation._now_seconds = lambda: 10.05
+    navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=0)
+    navigation._scan_state = 'scanning'
+    navigation._scan_angle = 2 * math.pi
+    estimate = navigation.update_estimate(
+        {'offset': None, 'blue_fraction': 0., 'fork': False,
+         'scan_yellow_fraction': 0.0}, None)
+    assert not estimate['valid'] and not estimate.get('scan', False)
+    assert navigation.compute_motion(navigation.choose_action(estimate)) == (0., 0.)
 
 
 def test_navigation_slows_for_offset_and_pd_turns_toward_road(navigation):

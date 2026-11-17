@@ -30,6 +30,12 @@ class Navigation(Node):
             'blue_roi_top_fraction', 0.60).value)
         self.blue_roi_bottom = float(self.declare_parameter(
             'blue_roi_bottom_fraction', 0.90).value)
+        self.scan_yaw_rate = float(self.declare_parameter(
+            'scan_yaw_rate_rad_s', 0.60).value)
+        self.scan_yellow_fraction = float(self.declare_parameter(
+            'scan_yellow_min_fraction', 0.005).value)
+        self.scan_min_angle = float(self.declare_parameter(
+            'scan_min_turn_rad', 0.35).value)
         self.fork_min_fraction = float(self.declare_parameter('fork_min_fraction', 0.015).value)
         self.fork_min_separation = float(self.declare_parameter(
             'fork_min_separation_fraction', 0.20).value)
@@ -56,6 +62,8 @@ class Navigation(Node):
         self._last_frame_stamp = None
         self._last_valid_offset_at = None
         self._last_error = None
+        self._scan_state = 'following'
+        self._scan_angle = 0.0
         self.create_subscription(Image, 'camera/image_raw', self.image_cb, qos_profile_sensor_data)
         self.create_subscription(Imu, 'imu/data', self.imu_cb, qos_profile_sensor_data)
         self.publisher = self.create_publisher(
@@ -74,7 +82,8 @@ class Navigation(Node):
 
     def _validate_parameters(self):
         positive = (self.max_speed, self.min_speed, self.fork_speed, self.slow_offset,
-                    self.max_image_age, self.max_yaw_rate)
+                    self.max_image_age, self.max_yaw_rate, self.scan_yaw_rate,
+                    self.scan_min_angle)
         if not all(math.isfinite(value) and value > 0 for value in positive):
             raise ValueError('speed, offset, age and yaw parameters must be finite and positive')
         if not self.min_speed <= self.fork_speed <= self.max_speed:
@@ -85,6 +94,10 @@ class Navigation(Node):
             raise ValueError('steering gains must be finite and nonnegative')
         if not 0 < self.blue_stop_fraction <= 1 or not 0 < self.fork_min_fraction <= 1:
             raise ValueError('pixel fractions must be in (0, 1]')
+        if not 0 < self.scan_yellow_fraction <= 1:
+            raise ValueError('scan_yellow_min_fraction must be in (0, 1]')
+        if self.scan_min_angle >= 2 * math.pi:
+            raise ValueError('scan_min_turn_rad must be less than one revolution')
         if not 0 < self.blue_corridor_half_width < 0.5:
             raise ValueError('blue_corridor_half_width_fraction must be in (0, 0.5)')
         if not 0 <= self.blue_roi_top < self.blue_roi_bottom <= 1:
@@ -150,6 +163,12 @@ class Navigation(Node):
         orange_guard = cv2.dilate(orange, guard_kernel)
         yellow = cv2.bitwise_and(yellow, cv2.bitwise_not(orange_guard))
 
+        # Use more of the image than the normal 50%-75% lookahead while
+        # turning in place, but still require a small region rather than one
+        # noisy yellow pixel.
+        scan_roi = yellow[int(height * 0.35):max(int(height * 0.90), 1), :]
+        scan_yellow_fraction = cv2.countNonZero(scan_roi) / scan_roi.size
+
         # Blue paper alongside a valid road is expected. Stop only when enough
         # blue occupies the near, central driving corridor.
         center_x = width // 2
@@ -160,13 +179,15 @@ class Navigation(Node):
                         max(0, center_x - half_width):min(width, center_x + half_width)]
         blue_fraction = cv2.countNonZero(blue_roi) / blue_roi.size
         if blue_fraction >= self.blue_stop_fraction:
-            return {'blue_fraction': blue_fraction, 'offset': None, 'fork': False}
+            return {'blue_fraction': blue_fraction, 'offset': None, 'fork': False,
+                    'scan_yellow_fraction': scan_yellow_fraction}
 
         row_top, row_bottom = int(height * 0.72), max(int(height * 0.82), int(height * 0.72) + 1)
         near_road = yellow[row_top:row_bottom, :]
         moments = cv2.moments(near_road, binaryImage=True)
         if moments['m00'] == 0:
-            return {'blue_fraction': blue_fraction, 'offset': None, 'fork': False}
+            return {'blue_fraction': blue_fraction, 'offset': None, 'fork': False,
+                    'scan_yellow_fraction': scan_yellow_fraction}
         near_center_x = moments['m10'] / moments['m00']
 
         look_top, look_bottom = int(height * 0.50), max(int(height * 0.75), int(height * 0.50) + 1)
@@ -191,27 +212,50 @@ class Navigation(Node):
         if is_fork:
             target_x = left_center if left_count > right_count else right_center
         offset = (target_x - (width - 1) / 2) / (width / 2)
-        return {'blue_fraction': blue_fraction, 'offset': offset, 'fork': is_fork}
+        return {'blue_fraction': blue_fraction, 'offset': offset, 'fork': is_fork,
+                'scan_yellow_fraction': scan_yellow_fraction}
+
+    def _clear_road_estimate(self):
+        self._smoothed_offset = None
+        self._offset_rate = 0.0
+        self._last_valid_offset_at = None
 
     def update_estimate(self, observation, imu):
         """Smooth each new valid frame; offset is positive when the road is right."""
         del imu
         stamp = self._stamp_seconds(self.image_stamp)
         if observation is None or stamp is None:
-            self._smoothed_offset = None
-            self._offset_rate = 0.0
-            self._last_valid_offset_at = None
+            self._clear_road_estimate()
             return {'valid': False, 'reason': 'missing or stale image'}
-        if observation['blue_fraction'] >= self.blue_stop_fraction:
-            self._smoothed_offset = None
-            self._offset_rate = 0.0
-            self._last_valid_offset_at = None
-            return {'valid': False, 'reason': 'blue region in forward image'}
+        blue_detected = observation['blue_fraction'] >= self.blue_stop_fraction
+        scan_yellow = observation.get('scan_yellow_fraction', 0.0)
+
+        if self._scan_state == 'scanning':
+            if (self._scan_angle >= self.scan_min_angle and not blue_detected and
+                    scan_yellow >= self.scan_yellow_fraction):
+                self._scan_state = 'following'
+            elif self._scan_angle >= 2 * math.pi:
+                self._scan_state = 'scan_failed'
+                self._clear_road_estimate()
+                return {'valid': False, 'reason': 'full scan found no yellow road'}
+            else:
+                self._clear_road_estimate()
+                return {'valid': False, 'reason': 'scanning anticlockwise', 'scan': True}
+
+        if self._scan_state == 'scan_failed':
+            if not blue_detected and scan_yellow >= self.scan_yellow_fraction:
+                self._scan_state = 'following'
+            else:
+                self._clear_road_estimate()
+                return {'valid': False, 'reason': 'full scan found no yellow road'}
+        if blue_detected:
+            self._scan_state = 'scanning'
+            self._scan_angle = 0.0
+            self._clear_road_estimate()
+            return {'valid': False, 'reason': 'blue region; starting scan', 'scan': True}
         raw_offset = observation['offset']
         if raw_offset is None:
-            self._smoothed_offset = None
-            self._offset_rate = 0.0
-            self._last_valid_offset_at = None
+            self._clear_road_estimate()
             return {'valid': False, 'reason': 'yellow road not detected'}
 
         if stamp != self._last_frame_stamp:
@@ -227,9 +271,7 @@ class Navigation(Node):
             self._last_frame_stamp = stamp
         self._last_valid_offset_at = stamp
         if self._now_seconds() - stamp > self.max_image_age:
-            self._smoothed_offset = None
-            self._offset_rate = 0.0
-            self._last_valid_offset_at = None
+            self._clear_road_estimate()
             return {'valid': False, 'reason': 'yellow detection expired'}
         return {
             'valid': True,
@@ -241,6 +283,8 @@ class Navigation(Node):
     def choose_action(self, estimate):
         """Slow for larger offsets; select the wider detected fork branch."""
         if not estimate['valid']:
+            if estimate.get('scan'):
+                return {'scan': True}
             return None
         offset = abs(estimate['offset'])
         speed_fraction = max(0.0, 1.0 - offset / self.slow_offset)
@@ -254,6 +298,8 @@ class Navigation(Node):
         """Return forward m/s and left-turn rad/s; a missing action means stop."""
         if action is None:
             return 0.0, 0.0
+        if action.get('scan'):
+            return 0.0, self.scan_yaw_rate
         yaw_rate = -(self.kp * action['offset'] + self.kd * action['offset_rate'])
         yaw_rate = max(-self.max_yaw_rate, min(self.max_yaw_rate, yaw_rate))
         return action['speed'], yaw_rate
@@ -265,6 +311,8 @@ class Navigation(Node):
             estimate = self.update_estimate(observation, self.imu)
             action = self.choose_action(estimate)
             forward, yaw = self.compute_motion(action)
+            if action is not None and action.get('scan'):
+                self._scan_angle += abs(yaw) * 0.05
             if not all(math.isfinite(value) for value in (forward, yaw)):
                 raise ValueError('controller returned a nonfinite command')
             self._last_error = None

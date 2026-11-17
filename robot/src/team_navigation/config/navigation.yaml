@@ -21,5 +21,10 @@
     blue_corridor_half_width_fraction: 0.15
     blue_roi_top_fraction: 0.60
     blue_roi_bottom_fraction: 0.90
+    # On blue, turn left in place and accept the first clear yellow path after
+    # a small initial turn. Stop if one commanded revolution finds nothing.
+    scan_yaw_rate_rad_s: 0.60
+    scan_yellow_min_fraction: 0.005
+    scan_min_turn_rad: 0.35
     fork_min_fraction: 0.015
     fork_min_separation_fraction: 0.20
