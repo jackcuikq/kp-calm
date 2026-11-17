@@ -32,6 +32,7 @@ class Navigation(Node):
             'blue_roi_bottom_fraction', 0.90).value)
         self.scan_yaw_rate = float(self.declare_parameter(
             'scan_yaw_rate_rad_s', 0.60).value)
+        self.scan_enabled = self.declare_parameter('scan_enabled', True).value
         self.scan_anticlockwise = self.declare_parameter(
             'scan_anticlockwise', True).value
         self.scan_yellow_fraction = float(self.declare_parameter(
@@ -88,8 +89,8 @@ class Navigation(Node):
                     self.scan_min_angle)
         if not all(math.isfinite(value) and value > 0 for value in positive):
             raise ValueError('speed, offset, age and yaw parameters must be finite and positive')
-        if type(self.scan_anticlockwise) is not bool:
-            raise ValueError('scan_anticlockwise must be true or false')
+        if type(self.scan_enabled) is not bool or type(self.scan_anticlockwise) is not bool:
+            raise ValueError('scan_enabled and scan_anticlockwise must be true or false')
         if not self.min_speed <= self.fork_speed <= self.max_speed:
             raise ValueError('fork speed must be between minimum and requested speed')
         if not 0 < self.smoothing_alpha <= 1:
@@ -254,6 +255,11 @@ class Navigation(Node):
                 self._clear_road_estimate()
                 return {'valid': False, 'reason': 'full scan found no yellow road'}
         if blue_detected:
+            if not self.scan_enabled:
+                self._scan_state = 'following'
+                self._scan_angle = 0.0
+                self._clear_road_estimate()
+                return {'valid': False, 'reason': 'blue region in forward image'}
             self._scan_state = 'scanning'
             self._scan_angle = 0.0
             self._clear_road_estimate()

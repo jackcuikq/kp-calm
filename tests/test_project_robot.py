@@ -425,6 +425,17 @@ def test_navigation_scan_direction_flag(navigation):
     assert navigation.compute_motion(action) == (0., -navigation.scan_yaw_rate)
 
 
+def test_navigation_scan_can_be_disabled(navigation):
+    navigation.scan_enabled = False
+    navigation._now_seconds = lambda: 10.05
+    navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=0)
+    estimate = navigation.update_estimate(
+        {'offset': None, 'blue_fraction': navigation.blue_stop_fraction,
+         'fork': False, 'scan_yellow_fraction': 0.0}, None)
+    assert not estimate['valid'] and not estimate.get('scan', False)
+    assert navigation.compute_motion(navigation.choose_action(estimate)) == (0., 0.)
+
+
 def test_navigation_scan_stops_after_one_revolution(navigation):
     navigation._now_seconds = lambda: 10.05
     navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=0)

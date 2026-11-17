@@ -23,6 +23,7 @@
     blue_roi_bottom_fraction: 0.90
     # On blue, turn in place and accept the first clear yellow path after a
     # small initial turn. Stop if one commanded revolution finds nothing.
+    scan_enabled: true
     scan_yaw_rate_rad_s: 0.60
     scan_anticlockwise: true
     scan_yellow_min_fraction: 0.005
