@@ -484,6 +484,20 @@ def test_navigation_slows_for_offset_and_pd_turns_toward_road(navigation):
     assert navigation.compute_motion(None) == (0., 0.)
 
 
+def test_navigation_uses_smooth_speed_schedule(navigation):
+    estimate = {
+        'valid': True,
+        'offset': navigation.slow_offset * .25,
+        'offset_rate': 0.,
+        'fork': False,
+    }
+    action = navigation.choose_action(estimate)
+    smooth_fraction = .75 * .75 * (3 - 2 * .75)
+    expected = navigation.min_speed + (
+        navigation.max_speed - navigation.min_speed) * smooth_fraction
+    assert action['speed'] == pytest.approx(expected)
+
+
 def test_hardware_checks_mode_and_post_selection_stamp():
     text = (ROOT/'robot/src/a2r_robot/a2r_robot/hardware.py').read_text()
     assert 'selected_mode=self.local_deadman.mode' in text

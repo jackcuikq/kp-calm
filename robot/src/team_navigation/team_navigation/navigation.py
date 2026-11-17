@@ -19,6 +19,8 @@ class Navigation(Node):
         self.fork_speed = float(self.declare_parameter('fork_forward_speed_m_s', 0.035).value)
         self.slow_offset = float(self.declare_parameter('slow_offset_fraction', 0.35).value)
         self.smoothing_alpha = float(self.declare_parameter('smoothing_alpha', 0.35).value)
+        self.lookahead_weight = float(self.declare_parameter('lookahead_weight', 0.0).value)
+        self.control_period = float(self.declare_parameter('control_period_s', 0.05).value)
         self.max_image_age = float(self.declare_parameter('max_image_age_s', 0.20).value)
         self.kp = float(self.declare_parameter('steering_kp', 0.8).value)
         self.kd = float(self.declare_parameter('steering_kd', 0.05).value)
@@ -72,7 +74,7 @@ class Navigation(Node):
         self.publisher = self.create_publisher(
             MotionRequest, 'navigation/request',
             QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
-        self.create_timer(0.05, self.tick)
+        self.create_timer(self.control_period, self.tick)
 
     @staticmethod
     def _hsv_triplet(value):
@@ -86,7 +88,7 @@ class Navigation(Node):
     def _validate_parameters(self):
         positive = (self.max_speed, self.min_speed, self.fork_speed, self.slow_offset,
                     self.max_image_age, self.max_yaw_rate, self.scan_yaw_rate,
-                    self.scan_min_angle)
+                    self.scan_min_angle, self.control_period)
         if not all(math.isfinite(value) and value > 0 for value in positive):
             raise ValueError('speed, offset, age and yaw parameters must be finite and positive')
         if type(self.scan_enabled) is not bool or type(self.scan_anticlockwise) is not bool:
@@ -95,6 +97,8 @@ class Navigation(Node):
             raise ValueError('fork speed must be between minimum and requested speed')
         if not 0 < self.smoothing_alpha <= 1:
             raise ValueError('smoothing_alpha must be in (0, 1]')
+        if not 0 <= self.lookahead_weight <= 1:
+            raise ValueError('lookahead_weight must be in [0, 1]')
         if not all(math.isfinite(value) and value >= 0 for value in (self.kp, self.kd)):
             raise ValueError('steering gains must be finite and nonnegative')
         if not 0 < self.blue_stop_fraction <= 1 or not 0 < self.fork_min_fraction <= 1:
@@ -200,6 +204,9 @@ class Navigation(Node):
         half = width // 2
         left_roi, right_roi = lookahead[:, :half], lookahead[:, half:]
         left_count, right_count = cv2.countNonZero(left_roi), cv2.countNonZero(right_roi)
+        look_moments = cv2.moments(lookahead, binaryImage=True)
+        look_center = (look_moments['m10'] / look_moments['m00']
+                       if look_moments['m00'] else None)
         left_moments = cv2.moments(left_roi, binaryImage=True)
         right_moments = cv2.moments(right_roi, binaryImage=True)
         left_center = (left_moments['m10'] / left_moments['m00']
@@ -216,6 +223,9 @@ class Navigation(Node):
         target_x = near_center_x
         if is_fork:
             target_x = left_center if left_count > right_count else right_center
+        elif look_center is not None:
+            target_x = ((1 - self.lookahead_weight) * near_center_x +
+                        self.lookahead_weight * look_center)
         offset = (target_x - (width - 1) / 2) / (width / 2)
         return {'blue_fraction': blue_fraction, 'offset': offset, 'fork': is_fork,
                 'scan_yellow_fraction': scan_yellow_fraction}
@@ -309,6 +319,9 @@ class Navigation(Node):
             return None
         offset = abs(estimate['offset'])
         speed_fraction = max(0.0, 1.0 - offset / self.slow_offset)
+        # Smoothstep keeps nearly centered curves fast while avoiding abrupt
+        # speed changes as the road approaches the edge of the image.
+        speed_fraction = speed_fraction * speed_fraction * (3.0 - 2.0 * speed_fraction)
         speed = self.min_speed + (self.max_speed - self.min_speed) * speed_fraction
         if estimate['fork']:
             speed = min(speed, self.fork_speed)
@@ -334,7 +347,7 @@ class Navigation(Node):
             action = self.choose_action(estimate)
             forward, yaw = self.compute_motion(action)
             if action is not None and action.get('scan'):
-                self._scan_angle += abs(yaw) * 0.05
+                self._scan_angle += abs(yaw) * self.control_period
             if not all(math.isfinite(value) for value in (forward, yaw)):
                 raise ValueError('controller returned a nonfinite command')
             self._last_error = None
