@@ -32,6 +32,8 @@ class Navigation(Node):
             'blue_roi_bottom_fraction', 0.90).value)
         self.scan_yaw_rate = float(self.declare_parameter(
             'scan_yaw_rate_rad_s', 0.60).value)
+        self.scan_anticlockwise = self.declare_parameter(
+            'scan_anticlockwise', True).value
         self.scan_yellow_fraction = float(self.declare_parameter(
             'scan_yellow_min_fraction', 0.005).value)
         self.scan_min_angle = float(self.declare_parameter(
@@ -86,6 +88,8 @@ class Navigation(Node):
                     self.scan_min_angle)
         if not all(math.isfinite(value) and value > 0 for value in positive):
             raise ValueError('speed, offset, age and yaw parameters must be finite and positive')
+        if type(self.scan_anticlockwise) is not bool:
+            raise ValueError('scan_anticlockwise must be true or false')
         if not self.min_speed <= self.fork_speed <= self.max_speed:
             raise ValueError('fork speed must be between minimum and requested speed')
         if not 0 < self.smoothing_alpha <= 1:
@@ -240,7 +244,8 @@ class Navigation(Node):
                 return {'valid': False, 'reason': 'full scan found no yellow road'}
             else:
                 self._clear_road_estimate()
-                return {'valid': False, 'reason': 'scanning anticlockwise', 'scan': True}
+                direction = 'anticlockwise' if self.scan_anticlockwise else 'clockwise'
+                return {'valid': False, 'reason': f'scanning {direction}', 'scan': True}
 
         if self._scan_state == 'scan_failed':
             if not blue_detected and scan_yellow >= self.scan_yellow_fraction:
@@ -299,7 +304,8 @@ class Navigation(Node):
         if action is None:
             return 0.0, 0.0
         if action.get('scan'):
-            return 0.0, self.scan_yaw_rate
+            direction = 1.0 if self.scan_anticlockwise else -1.0
+            return 0.0, direction * self.scan_yaw_rate
         yaw_rate = -(self.kp * action['offset'] + self.kd * action['offset_rate'])
         yaw_rate = max(-self.max_yaw_rate, min(self.max_yaw_rate, yaw_rate))
         return action['speed'], yaw_rate

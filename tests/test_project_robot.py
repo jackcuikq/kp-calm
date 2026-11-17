@@ -417,6 +417,14 @@ def test_navigation_scan_turns_left_then_accepts_first_clear_yellow(navigation):
     assert navigation._scan_state == 'following'
 
 
+def test_navigation_scan_direction_flag(navigation):
+    action = {'scan': True}
+    navigation.scan_anticlockwise = True
+    assert navigation.compute_motion(action) == (0., navigation.scan_yaw_rate)
+    navigation.scan_anticlockwise = False
+    assert navigation.compute_motion(action) == (0., -navigation.scan_yaw_rate)
+
+
 def test_navigation_scan_stops_after_one_revolution(navigation):
     navigation._now_seconds = lambda: 10.05
     navigation.image_stamp = types.SimpleNamespace(sec=10, nanosec=0)
