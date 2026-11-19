@@ -1,91 +1,111 @@
-# COSC 81/281 robot project
+# Team Kp Calm — Perceptive UGV racing (COSC 281)
 
-Start with [Setup and testing](docs/SETUP.md). This repository supplies the ROS 2 baseline students build, modify and extend, together with a starter navigation program and a PC viewer.
+A camera-only yellow-road follower for the course UGV. It follows the yellow road, avoids blue
+"water", takes the wider branch at forks, and turns in place to search when it loses the road.
 
-## Two computers, two workspaces
+## Submitted version
 
-You will work on two computers. Each one gets its own copy of this repository, but builds and runs a different folder inside it:
+- Branch `main`. The navigation code and race configuration were last changed in commit
+  `0701c4f` ("race", 2026-11-17).
+- **Race-day setting:** we raced on the **High** profile with `requested_forward_speed_m_s`
+  set to **0.65** on the car. The committed `navigation.yaml` still says `1.40`. To reproduce
+  the race run, change that line to `0.65` before building (see [Known limitations](#known-limitations)).
 
-| Computer | What it is | Folder it builds and runs | What that folder does |
-| --- | --- | --- | --- |
-| **The Jetson** | The small computer mounted on the robot. You log into it over SSH. | `robot/` | Runs the robot: sensors, motors, safety checks and your navigation code. |
-| **Your PC** | Your own laptop or lab computer. | `viewer/` | Shows the robot's live camera and telemetry in RViz. It does not drive the robot. |
+## What is ours
 
-Each of those two folders is a ROS workspace: a folder with a `src/` directory that you build with colcon. You build `robot/` only on the Jetson and `viewer/` only on your PC.
+Everything outside the two items below is the supplied course baseline and is unchanged
+(`a2r_robot`, `a2r_robot_interfaces`, `course_robot_interfaces`, `runtime/`, `viewer/`).
 
-```text
-a2r-student/                    # Clone of this repository
-├── README.md
-├── robot/                      # Build and run on the Jetson
-│   ├── src/
-│   │   ├── a2r_robot/          # Hardware access, motor control and stopping rules
-│   │   ├── a2r_robot_interfaces/
-│   │   ├── course_robot_interfaces/
-│   │   └── team_navigation/    # Student starting point
-│   ├── runtime/               # Source for installed camera/OLED/device helpers
-│   └── README.md
-├── viewer/                     # Build and run on your PC, not the Jetson
-│   ├── src/
-│   ├── config/
-│   └── README.md
-├── docs/                       # Setup guide and quick reference
-├── tests/                      # Software checks you can run without a robot
-└── LICENSE                     # MIT
-```
+| Path | Purpose |
+| --- | --- |
+| `robot/src/team_navigation/team_navigation/navigation.py` | The single ROS 2 node `navigation`. A 30 Hz timer runs perception (HSV yellow/blue/orange masks), estimation (stale-frame rejection, EMA on the offset, scan state), planning (follow / scan / stop, speed from the offset) and PD steering, then publishes one `MotionRequest` per tick. |
+| `robot/src/team_navigation/config/navigation.yaml` | All tuning parameters: speeds, PD gains, HSV thresholds, blue corridor, scan and fork settings. They are checked when the node starts. |
+| `robot/src/team_navigation/team_navigation/record_camera.py` | `record_camera` tool: saves a short AVI clip from the camera topic for offline threshold tuning. |
+| `robot/scripts/start_robot_motion.sh` | Starts the base with motion enabled and our measured track width (0.22 m). |
+| `tests/test_project_robot.py` | Offline tests for the navigation logic (added alongside each change). |
 
-Both computers clone the same repository, so the Jetson will also have a `viewer/` folder and your PC will also have a `robot/` folder. Leave the other computer's folder unbuilt. Never run colcon from the repository root: `robot/` and `viewer/` each contain their own copy of the interface packages, and building them together fails.
+## Dependencies
 
-When built, each workspace creates its own `build/`, `install/` and `log/` folders inside itself. Git ignores these generated folders. There is no separate `~/ros2_ws` and no source-copy step.
+There are no dependencies beyond the supplied Jetson image: ROS 2 Jazzy, `~/ros-venv`,
+OpenCV, NumPy and `cv_bridge`. The offline tests need only `pytest` (`requirements-test.txt`).
 
-The viewer is optional: only one person per team needs to be able to build it. Everyone else can work entirely over SSH, saving or recording data on the Jetson and copying files to their PC with `scp`. RViz is worth having on one machine because seeing the camera and telemetry live makes debugging much easier.
-
-## Get the repository
-
-In a terminal on each machine:
+## Build (on the Jetson)
 
 ```bash
-cd ~
-git clone https://github.com/plancherb1/cosc-281-f26-project.git a2r-student
+source /opt/ros/jazzy/setup.bash
+source ~/ros-venv/bin/activate
+cd ~/a2r-student/robot
+python -m colcon build --symlink-install
 ```
 
-The repository is public, so no GitHub sign-in is needed. If the Jetson has no internet access, the [setup guide](docs/SETUP.md#2-clone-the-repository-on-the-jetson) shows how to copy your PC clone to it instead. If `~/a2r-student` already exists, inspect it before cloning or updating; keep your own edits.
+Four packages should finish.
 
-## Get Started with docs/SETUP.md
+## Launch (on the Jetson)
 
-1. Follow [wiring and connection checks](docs/SETUP.md#hardware-connections-and-pinout).
-2. On the **Jetson**, follow [the robot build](docs/SETUP.md#build-the-robot-workspace-on-the-jetson). This builds the baseline, both message packages and student program together in `robot/`.
-3. Follow [the disabled-first launch](docs/SETUP.md#first-launch-motors-disabled), then [sensor and communication checks](docs/SETUP.md#run-the-student-program).
-4. On **one team member's PC**, follow [viewer setup](viewer/README.md) and verify live robot data over the assigned router. This step is optional for everyone else.
-5. Complete [controlled movement/stopping](docs/SETUP.md#controlled-movement-and-stopping-check) and [calibration](docs/SETUP.md#encoder-calibration-and-geometry).
-6. If you have time, try [making your first autonomous node](docs/SETUP.md#getting-started-with-autonomy).
-7. Finish with [stop, restore and record](docs/SETUP.md#stop-restore-and-record) and the [end of session shutdown](docs/SETUP.md#end-of-session-shutdown).
-
-The lab Jetsons already have their commissioned OS, firmware, ROS Jazzy, `~/ros-venv`, identity/network settings and standalone camera/OLED services. [Prerequisite checks](docs/SETUP.md#check-the-commissioned-prerequisites) verify those before building. You build the ROS baseline yourself. If a prerequisite check fails, ask the teaching staff; it is not something to fix by rebuilding your code.
-
-## Connection details
-
-| Connection | Name / username | Password |
-| --- | --- | --- |
-| 2.4 GHz Wi-Fi | Robot 1: `a2r-projects`; robots 2–5: `a2r-projects-N` | See Canvas |
-| 5 GHz Wi-Fi | Assigned SSID with `_5G` appended | See Canvas |
-| SSH, all robots | `a2r-lab-jetson` | See Canvas |
-
-Replace `N` with the robot number. Use the IP on the robot's OLED:
+Terminal A starts the base with motion enabled:
 
 ```bash
-ssh a2r-lab-jetson@ROBOT_IP
+cd ~/a2r-student/robot
+./scripts/start_robot_motion.sh
 ```
 
-The passwords are posted on Canvas, not in this public repository. Keep them, and your personal GitHub keys, out of commits and off shared robots.
+Terminal B starts our navigation node:
 
-## References
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/a2r-student/robot/install/setup.bash
+source ~/ros-venv/bin/activate
+source /etc/a2r-robot/robot.sh
+ros2 launch team_navigation team.launch.py namespace:="$ROBOT_NAMESPACE"
+```
 
-- [Robot baseline and student program](robot/README.md)
-- [PC viewer](viewer/README.md)
-- [Quick reference](docs/QUICK_REFERENCE.md): the everyday commands on one page, for after you have completed setup once.
-- [Software tests](robot/README.md#run-the-software-tests)
+On the gamepad:
+1. Release the sticks and press **Y** to select the speed profile. We used **High**.
+2. **Hold RB** to let the car drive autonomously.
+3. Press **A** to stop.
 
-This repository is maintained by the [A2R Lab](https://a2r-lab.org) and released under the [MIT license](LICENSE). Retain the [course attribution](robot/NOTICE.md) when you copy or modify the starter. The student navigation package contains a basic yellow-road follower; calibrate and validate it on your robot before use.
+For a first check without motion, use the disabled launch in [robot/README.md](robot/README.md#run).
 
-## AI Disclosure
-We used LLM tools, including Codex and Claude Code, to assist with software implementation, drafting, proofreading, and review. All final text, figures, code, and references were edited, revised, and reviewed by humans.
+## Reproducing a representative test
+
+1. **Offline (no robot, no ROS):** from the repository root, run:
+   ```bash
+   python3 -m venv .venv && source .venv/bin/activate
+   python -m pip install -r requirements-test.txt
+   python -m pytest tests -q
+   ```
+   All 93 tests should pass. The navigation tests use synthetic frames to check blue rejection,
+   scan entry and exit, the stop after one empty revolution, and the PD steering sign.
+2. **On the car:** lay a short yellow paper road with one tight curve and blue paper along both
+   edges. Build, launch as above, set `requested_forward_speed_m_s: 0.65` and hold RB on the
+   High profile. The car should follow the curve. If its nose crosses into blue, it should
+   turn in place and resume once it sees yellow. If it is driven off the end of the road, it
+   should scan one full turn and then stop.
+
+## Known limitations
+
+- **High speed:** at the committed 1.40 m/s the car reacts late in curves. The PD gains we tried
+  did not fix this, so we raced at 0.65 m/s. Image delay is a suspected cause, but we never
+  measured it.
+- **Fork false trigger:** approaching the fork, the car can see blue before the yellow branches.
+  It then starts a scan instead of following the visible road.
+- **Fixed scan direction:** the car always scans in one direction, set per track by
+  `scan_anticlockwise`. It does not pick a direction from what it last saw.
+- **Lighting:** the HSV thresholds were calibrated under the lab lighting and may need retuning
+  elsewhere.
+- **Not implemented:** the IMU is subscribed but unused, the car does not use odometry, and the
+  planned arc-sampling lookahead was never built.
+
+## Not included
+
+`build/`, `install/`, `log/`, camera clips and videos, caches and credentials are git-ignored.
+Lab passwords are on Canvas.
+
+## Attribution and AI disclosure
+
+The baseline is from the A2R Lab course repository ([MIT license](LICENSE),
+[course attribution](robot/NOTICE.md)). The course's own setup guide is kept in
+[docs/SETUP.md](docs/SETUP.md) and [robot/README.md](robot/README.md).
+
+We used LLM tools (Claude, GitHub Copilot and Codex) for initial code generation, debugging and
+drafting. The team reviewed and tested all suggestions on the robot before use.
