@@ -1,6 +1,6 @@
-# Team Kp Calm — Perceptive UGV racing (COSC 281)
+# Team Kp Calm — COSC 281 final project
 
-A camera-only yellow-road follower for the course UGV. It follows the yellow road, avoids blue
+A camera-only yellow-road follower. It follows the yellow road, avoids blue
 "water", takes the wider branch at forks, and turns in place to search when it loses the road.
 
 ## Submitted version
